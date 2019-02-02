@@ -1,0 +1,18 @@
+version: '3.3'
+
+volumes:
+  db:
+
+
+services:
+
+  database:
+    image: mysql:5.7
+    volumes:
+      - db:/var/lib/mysql
+    ports:
+      - 33060:3306
+    environment:
+      - MYSQL_USER=homestead
+      - MYSQL_PASSWORD=secret
+      - MYSQL_ROOT_PASSWORD=secret

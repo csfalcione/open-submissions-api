@@ -8,5 +8,7 @@ defmodule OpenSubmissionsWeb.Router do
   scope "/api", OpenSubmissionsWeb do
     pipe_through :api
     resources "/problems", ProblemController
+    get "/submissions/:id", SubmissionController, :show
+    post "/problems/:id/submissions", SubmissionController, :submit
   end
 end

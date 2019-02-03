@@ -1,0 +1,46 @@
+import java.util.Scanner;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class Main {
+
+    public static void main(String[] args) throws IOException {
+        String filename = System.getenv("RESULT_FILE");
+
+        Scanner scanner = new Scanner(System.in);
+
+        Solution solution = new Solution();
+
+        String s = scanner.nextLine();
+
+
+
+
+
+        <% return_type %> result = solution.<% function_name %>( <% params %>);
+
+
+
+
+        BufferedWriter writer = new BufferedWriter(
+            new FileWriter(filename)
+        );
+
+
+        writer.write(String.valueOf(result));
+
+
+        writer.newLine();
+        writer.close();
+        scanner.close();
+
+    }
+
+}
+
+class Solution {
+
+    <% user_code %>
+
+}

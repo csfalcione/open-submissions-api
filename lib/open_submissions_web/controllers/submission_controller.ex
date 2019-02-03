@@ -3,15 +3,19 @@ defmodule OpenSubmissionsWeb.SubmissionController do
 
   alias OpenSubmissions.Submissions
   alias OpenSubmissions.Submissions.Submission
+  alias OpenSubmissions.Problems
+  alias OpenSubmissions.Execution.Execution
 
   action_fallback OpenSubmissionsWeb.FallbackController
 
   def submit(conn, %{"id" => problem_id, "submission" => submission_params}) do
     submission_params = Map.merge(submission_params, %{"problem_id" => problem_id, "status" => "pending"})
-    with {:ok, %Submission{} = submission} <- Submissions.create_submission(submission_params) do
+    with {:ok, %Submission{problem_id: problem_id} = submission} <- Submissions.create_submission(submission_params) do
+      _problem = Problems.get_problem!(problem_id)
+#      cases =
+#      result = Execution.execute_all(submission, problem)
       conn
       |> put_status(:created)
-      |> put_resp_header("location", Routes.submission_path(conn, :show, submission))
       |> render("show.json", submission: submission)
     end
   end

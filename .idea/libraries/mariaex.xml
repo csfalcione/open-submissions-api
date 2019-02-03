@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="mariaex" type="mix">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/_build/dev/lib/mariaex/ebin" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/deps/mariaex/lib" />
+    </SOURCES>
+  </library>
+</component>

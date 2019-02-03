@@ -15,7 +15,7 @@ defmodule OpenSubmissions.Submissions.Submission do
   @doc false
   def changeset(submission, attrs) do
     submission
-    |> cast(attrs, [:code, :language, :status])
-    |> validate_required([:code, :language, :status])
+    |> cast(attrs, [:code, :language, :status, :problem_id])
+    |> validate_required([:code, :language, :status, :problem_id])
   end
 end

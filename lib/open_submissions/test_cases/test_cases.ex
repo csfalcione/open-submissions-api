@@ -21,6 +21,13 @@ defmodule OpenSubmissions.TestCases do
     Repo.all(TestCase)
   end
 
+  def list_by_problem!(problem_id) do
+    query = from case in "test_cases",
+          where: case.problem_id == ^problem_id,
+          select: %TestCase{id: case.id, input: case.input, output: case.output}
+    Repo.all(query)
+  end
+
   @doc """
   Gets a single test_case.
 

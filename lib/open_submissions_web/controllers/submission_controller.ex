@@ -4,6 +4,7 @@ defmodule OpenSubmissionsWeb.SubmissionController do
   alias OpenSubmissions.Submissions
   alias OpenSubmissions.Submissions.Submission
   alias OpenSubmissions.Problems
+  alias OpenSubmissions.TestCases
   alias OpenSubmissions.Execution.Execution
 
   action_fallback OpenSubmissionsWeb.FallbackController
@@ -11,12 +12,25 @@ defmodule OpenSubmissionsWeb.SubmissionController do
   def submit(conn, %{"id" => problem_id, "submission" => submission_params}) do
     submission_params = Map.merge(submission_params, %{"problem_id" => problem_id, "status" => "pending"})
     with {:ok, %Submission{problem_id: problem_id} = submission} <- Submissions.create_submission(submission_params) do
-      _problem = Problems.get_problem!(problem_id)
-#      cases =
-#      result = Execution.execute_all(submission, problem)
+      problem = Problems.get_problem!(problem_id)
+      cases = TestCases.list_by_problem!(problem_id)
+      IO.inspect(cases)
+      results = Execution.execute_all(submission, problem, cases)
+      |> Enum.map(fn result ->
+          with {:ok, output, {:ok, stdout}, expected} <- result do
+            %{
+              output: output,
+              stdout: stdout,
+              expected: expected
+            }
+          else err -> %{err: err}
+          end
+        end
+      )
+      |> Enum.into([])
       conn
       |> put_status(:created)
-      |> render("show.json", submission: submission)
+      |> json(results)
     end
   end
 

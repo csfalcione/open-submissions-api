@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="open_submissions_dev@localhost" uuid="398b1b29-fd9e-4d06-a572-e9f5afaba7b7">
+    <data-source source="LOCAL" name="open_submissions" uuid="398b1b29-fd9e-4d06-a572-e9f5afaba7b7">
       <driver-ref>mysql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.jdbc.Driver</jdbc-driver>

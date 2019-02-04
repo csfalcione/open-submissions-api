@@ -21,6 +21,8 @@ defmodule OpenSubmissions.Problems do
     Repo.all(Problem)
   end
 
+  def get_problem(id), do: Repo.get(Problem, id)
+
   @doc """
   Gets a single problem.
 

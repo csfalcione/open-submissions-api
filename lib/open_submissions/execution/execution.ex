@@ -7,56 +7,43 @@ defmodule OpenSubmissions.Execution.Execution do
 	def execute_all(%Submission{} = submission, %Problem{} = problem, test_cases) do
 		test_cases
 		|> Enum.map(fn %TestCase{output: expected} = test_case ->
-				with {:ok, output, stdio} <- execute(submission, problem, test_case) do
-					res = {:ok, output, stdio, expected}
-					IO.inspect(res)
-					res
-				else
-					err ->
-						IO.inspect(err)
-						err
+				case execute(submission, problem, test_case) do
+					{:ok, results} -> results
+					{:error, error} -> %{error: error, test_case: test_case}
 				end
 			end)
 		|> Enum.into([])
 	end
 
-	def execute(%Submission{code: code, language: lang} = submission,
+	def execute(%Submission{language: lang} = submission,
 							%Problem{} = problem,
-							%TestCase{id: case_id, input: case_input}) do
-			{:ok, folder_name} = make_folder(submission)
-    	{:ok, source} = fill_template(lang, code, problem)
-			{:ok, source_file} = make_source_file(lang, source, folder_name)
-			IO.puts(source_file)
-			with {:ok, _msg, artifact} <-  build_source_file(lang, folder_name, source_file) do
-				output_file = "result_#{case_id}.txt"
-				stdout = execute_command(
-					get_command(lang, folder_name, artifact),
-					"#{case_input}\n",
-					output_file,
-					5000
-				)
-				case File.read("#{folder_name}/#{output_file}") do
-					{:ok, result} -> {:ok, result, stdout}
-				  {:error, _} -> {:error, stdout}
+							%TestCase{} = test_case) do
 
-				end
-			else {:err, err} ->
-				{:err, "Compilation error: #{err}"}
-			end
+		with(
+			{:ok, folder_name} <- make_folder(submission),
+			{:ok, source} <- fill_template(submission, problem),
+			{:ok, source_file} <- make_source_file(lang, source, folder_name),
+			{:ok, _, artifact} <- build_source_file(lang, folder_name, source_file),
+			{:ok, command} <- get_command(lang, folder_name, artifact),
+			stdin <- get_stdin(test_case),
+			output_filename <- make_output_filename(test_case),
+			{:ok, stdout} <- execute_command(command, stdin, output_filename, 5000),
+			{:ok, problem_result} <- read_problem_result(folder_name, output_filename),
+			do: {:ok, %{ stdout: stdout, output: problem_result, test_case: test_case } }
+		)
 
 	end
+
 
 	def make_folder(%Submission{id: id}) do
 		name = "sub_#{id}"
 		with :ok <- File.mkdir_p(name) do
 			{:ok, name}
-		else _ ->
-			{:err}
 		end
 	end
 
-	def fill_template("java", code, %Problem{} = _problem) do
-		{:ok, code}
+	def fill_template(%Submission{code: snippet}, %Problem{} = _problem) do
+		{:ok, snippet}
 	end
 
 	def make_source_file("java", source, folder_name) do
@@ -79,22 +66,31 @@ defmodule OpenSubmissions.Execution.Execution do
 			filename
 		]) do
 			{msg, 0} -> {:ok, msg, "Main"}
-			{err, _} -> {:err, err}
+			{err, _} -> {:error, err}
 		end
 	end
 
 
 	def get_command("java", folder_name, artifact) do
-		"docker run -e RESULT_FILE=$RESULT_FILE -v $PWD/#{folder_name}:/app -w /app -i java:8 java #{artifact}"
+		{:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v $PWD/#{folder_name}:/app -w /app -i java:8 java #{artifact}"}
 	end
 
-	def execute_command(command, stdin, file, timeout \\ 5000) do
-		IO.inspect({command, stdin, file})
+	def get_stdin(%TestCase{input: input}) do
+		"#{input}\n"
+	end
+
+	def make_output_filename(%TestCase{id: id}) do
+		"result_#{id}.txt"
+	end
+
+
+	def execute_command(command, stdin, output_filename, timeout \\ 5000) do
+		IO.inspect({command, stdin, output_filename})
 		port = Port.open({:spawn, command}, [
 			:stderr_to_stdout,
 			:binary,
 			{:env, [
-				{'RESULT_FILE', String.to_charlist(file)}
+				{'RESULT_FILE', String.to_charlist(output_filename)}
 			]}
 		])
 
@@ -106,7 +102,8 @@ defmodule OpenSubmissions.Execution.Execution do
 
 	end
 
-	def receive_output(output \\ "") do
+
+	defp receive_output(output \\ "") do
 		receive do
 			{port, {:data, data}} -> # receive more data
 				new_output = output <> data
@@ -120,11 +117,17 @@ defmodule OpenSubmissions.Execution.Execution do
 				with {:os_pid, ospid} <- Port.info(port, :os_pid) do
 					Port.close(port)
 					System.cmd("kill", ["#{ospid}"]) # for particularly difficult processes
-					:timeout
-				else _ -> :timeout
+					{:error, "timeout"}
+				else _ -> {:error, "timeout"}
 				end
 			_ -> # process stopped
 				{:ok, output}
 		end
-  end
+	end
+
+
+	def read_problem_result(folder, filename) do
+		File.read("#{folder}/#{filename}")
+	end
+
 end

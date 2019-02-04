@@ -2,7 +2,7 @@ defmodule OpenSubmissions.TestCases.TestCase do
   use Ecto.Schema
   import Ecto.Changeset
 
-
+  @derive{Jason.Encoder, only: [:input, :output, :id]}
   schema "test_cases" do
     field :input, :string
     field :output, :string

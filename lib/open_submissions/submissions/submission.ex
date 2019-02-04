@@ -16,6 +16,7 @@ defmodule OpenSubmissions.Submissions.Submission do
   def changeset(submission, attrs) do
     submission
     |> cast(attrs, [:code, :language, :status, :problem_id])
+    |> foreign_key_constraint(:problem_id)
     |> validate_required([:code, :language, :status, :problem_id])
   end
 end

@@ -37,3 +37,6 @@ open_submissions-*.tar
 
 
 /sub_*
+
+/.idea
+/.vscode

@@ -6,14 +6,21 @@ defmodule OpenSubmissions.Execution.Execution do
 
 	def execute_all(%Submission{} = submission, %Problem{} = problem, test_cases) do
 		test_cases
-		|> Enum.map(fn %TestCase{} = test_case ->
+		|> Task.async_stream( fn %TestCase{} = test_case ->
 				case execute(submission, problem, test_case) do
 					{:ok, results} -> results
-					{time, {:error, error}} -> %{error: error, test_case: test_case}
+					{_time, {:error, error}} -> %{error: error, test_case: test_case}
 					{:error, error} -> %{error: error, test_case: test_case}
 				end
+			end, timeout: 20_000, on_timeout: :kill_task, ordered: true)
+		|> Stream.zip(test_cases)
+		|> Stream.map(fn {result, test_case} -> 
+				case result do
+					{:ok, res} -> res
+					{:exit, :timeout} -> %{error: "timeout", test_case: test_case}
+				end
 			end)
-		|> Enum.into([])
+		|> Enum.to_list
 	end
 
 	def execute(%Submission{language: lang} = submission,

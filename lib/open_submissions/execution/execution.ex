@@ -69,7 +69,7 @@ defmodule OpenSubmissions.Execution.Execution do
 			"-v", "#{File.cwd!()}/#{folder_name}:/app",
 			"-w", "/app",
 			"-i",
-			"java:8",
+			"java:8-alpine",
 			"javac",
 			filename
 		]) do
@@ -80,7 +80,7 @@ defmodule OpenSubmissions.Execution.Execution do
 
 
 	def get_command("java", folder_name, artifact) do
-		{:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v $PWD/#{folder_name}:/app -w /app -i java:8 java #{artifact}"}
+		{:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v $PWD/#{folder_name}:/app -w /app -i java:8-alpine java #{artifact}"}
 	end
 
 	def get_stdin(%TestCase{input: input}) do

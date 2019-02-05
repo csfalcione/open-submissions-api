@@ -72,7 +72,7 @@ defmodule OpenSubmissions.Execution.Execution do
       "java:8-alpine",
       "javac",
       filename
-    ]) do
+    ], stderr_to_stdout: true) do
       {msg, 0} -> {:ok, msg, "Main"}
       {err, _} -> {:error, err}
     end

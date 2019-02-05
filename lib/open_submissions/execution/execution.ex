@@ -4,41 +4,47 @@ defmodule OpenSubmissions.Execution.Execution do
   alias OpenSubmissions.Problems.Problem
   alias OpenSubmissions.TestCases.TestCase
 
-  def execute_all(%Submission{} = submission, %Problem{} = problem, test_cases) do
-    test_cases
-    |> Task.async_stream( fn %TestCase{} = test_case ->
-        case execute(submission, problem, test_case) do
-          {:ok, results} -> results
-          {_time, {:error, error}} -> %{error: error, test_case: test_case}
-          {:error, error} -> %{error: error, test_case: test_case}
-        end
-      end, timeout: 20_000, on_timeout: :kill_task, ordered: true)
-    |> Stream.zip(test_cases)
-    |> Stream.map(fn {result, test_case} -> 
-        case result do
-          {:ok, res} -> res
-          {:exit, :timeout} -> %{error: "timeout", test_case: test_case}
-        end
-      end)
-    |> Enum.to_list
-  end
-
-  def execute(%Submission{language: lang} = submission,
-              %Problem{} = problem,
-              %TestCase{} = test_case) do
-
-    with(
-      {:ok, folder_name} <- make_folder(submission),
+  def execute_all(%Submission{language: lang} = submission, %Problem{} = problem, test_cases) do
+    with {:ok, folder_name} <- make_folder(submission),
       {:ok, source} <- fill_template(submission, problem),
       {:ok, source_file} <- make_source_file(lang, source, folder_name),
-      {:ok, _, artifact} <- build_source_file(lang, folder_name, source_file),
-      {:ok, command} <- get_command(lang, folder_name, artifact),
-      stdin <- get_stdin(test_case),
+      {:ok, _, artifact_name} <- build_source_file(lang, folder_name, source_file),
+      {:ok, command} <- get_command(lang, folder_name, artifact_name) do
+        
+        test_cases
+        |> Task.async_stream( fn %TestCase{} = test_case ->
+            case execute(test_case, command, folder_name) do
+              {:ok, results} -> results
+              {_time, {:error, error}} -> %{error: error, test_case: test_case}
+              {:error, error} -> %{error: error, test_case: test_case}
+            end
+          end, timeout: 20_000, on_timeout: :kill_task, ordered: true)
+        |> Stream.zip(test_cases)
+        |> Stream.map(fn {result, test_case} -> 
+            case result do
+              {:ok, res} -> res
+              {:exit, :timeout} -> %{error: "timeout", test_case: test_case}
+            end
+          end)
+        |> Enum.to_list
+    else
+      {:error, error} -> %{error: error}
+    end
+
+  end
+
+  def execute( %TestCase{} = test_case, command, folder_name, timeout \\ 5000 ) do
+
+    with stdin <- get_stdin(test_case),
       output_filename <- make_output_filename(test_case),
-      {time_taken, {:ok, stdout}} <- time( fn -> execute_command(command, stdin, output_filename, 5000) end ),
-      {:ok, problem_result} <- read_problem_result(folder_name, output_filename),
-      do: {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
-    )
+      {time_taken, {:ok, stdout}} <- time( fn -> execute_command(command, stdin, output_filename, timeout) end ) do
+      case read_problem_result(folder_name, output_filename) do
+        {:ok, problem_result} -> 
+          {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
+        {:error, :submission_error} -> 
+          {:error, %{stdout: stdout, test_case: test_case}}
+      end
+    end
 
   end
 
@@ -113,29 +119,33 @@ defmodule OpenSubmissions.Execution.Execution do
 
   defp receive_output(output \\ "") do
     receive do
-      {port, {:data, data}} -> # receive more data
+      # more data received from the port
+      {port, {:data, data}} ->
         new_output = output <> data
-        with nil <- Port.info(port) do # Port closed
-          {:ok, new_output}
-        else
-          _ -> # Port still open
-            receive_output(new_output)
+        case Port.info(port) do
+          nil -> {:ok, new_output} # port closed, return collected stdout
+          _ -> receive_output(new_output) # probably more output to collect
         end
-      {:kill_this_process, port} -> # timed out
-        with {:os_pid, ospid} <- Port.info(port, :os_pid) do
+
+      # we timed out
+      {:kill_this_process, port} ->
+        with {:os_pid, ospid} <- Port.info(port) do
           Port.close(port)
           System.cmd("kill", ["#{ospid}"]) # for particularly difficult processes
-          {:error, "timeout"}
-        else _ -> {:error, "timeout"}
         end
-      _ -> # process stopped
-        {:ok, output}
+        {:error, "timeout"}
+
+      # anything else means we already have all the output
+      _ -> {:ok, output}
     end
   end
 
 
   def read_problem_result(folder, filename) do
-    File.read("#{folder}/#{filename}")
+    case File.read("#{folder}/#{filename}") do
+      {:error, :enoent} -> {:error, :submission_error}
+      other -> other
+    end
   end
 
   defp time(action) do

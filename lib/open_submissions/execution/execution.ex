@@ -27,9 +27,9 @@ defmodule OpenSubmissions.Execution.Execution do
 			{:ok, command} <- get_command(lang, folder_name, artifact),
 			stdin <- get_stdin(test_case),
 			output_filename <- make_output_filename(test_case),
-			{:ok, stdout} <- execute_command(command, stdin, output_filename, 5000),
+			{time_taken, {:ok, stdout}} <- time( fn -> execute_command(command, stdin, output_filename, 5000) end ),
 			{:ok, problem_result} <- read_problem_result(folder_name, output_filename),
-			do: {:ok, %{ stdout: stdout, output: problem_result, test_case: test_case } }
+			do: {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
 		)
 
 	end
@@ -128,6 +128,13 @@ defmodule OpenSubmissions.Execution.Execution do
 
 	def read_problem_result(folder, filename) do
 		File.read("#{folder}/#{filename}")
+	end
+
+	defp time(action) do
+		time_before = System.monotonic_time(:millisecond)
+		result = action.()
+		time_after = System.monotonic_time(:millisecond)
+		{time_after - time_before, result}
 	end
 
 end

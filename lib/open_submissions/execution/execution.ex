@@ -3,17 +3,19 @@ defmodule OpenSubmissions.Execution.Execution do
   alias OpenSubmissions.Submissions.Submission
   alias OpenSubmissions.Problems.Problem
   alias OpenSubmissions.TestCases.TestCase
+  alias OpenSubmissions.Execution.Languages
 
-  def execute_all(%Submission{language: lang} = submission, %Problem{} = problem, test_cases) do
-    with {:ok, folder_name} <- make_folder(submission),
+  def execute_all(%Submission{language: lang_name} = submission, %Problem{} = problem, test_cases) do
+    with {:ok, language} <- get_language_implementation(lang_name),
+      {:ok, path} <- make_folder(submission),
       {:ok, source} <- fill_template(submission, problem),
-      {:ok, source_file} <- make_source_file(lang, source, folder_name),
-      {:ok, _, artifact_name} <- build_source_file(lang, folder_name, source_file),
-      {:ok, command} <- get_command(lang, folder_name, artifact_name) do
+      {:ok, source_file} <- language.make_source_file(path, source),
+      {:ok, artifact_name} <- language.build_source_file(path, source_file),
+      {:ok, command} <- language.get_command(path, artifact_name) do
         
         test_cases
         |> Task.async_stream( fn %TestCase{} = test_case ->
-            case execute(test_case, command, folder_name) do
+            case execute(test_case, command, path) do
               {:ok, results} -> results
               {_time, {:error, error}} -> %{error: error, test_case: test_case}
               {:error, error} -> %{error: error, test_case: test_case}
@@ -42,51 +44,30 @@ defmodule OpenSubmissions.Execution.Execution do
         {:ok, problem_result} -> 
           {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
         {:error, :submission_error} -> 
-          {:error, %{stdout: stdout, test_case: test_case}}
+          {:error, %{stdout: stdout}}
       end
     end
 
   end
 
+  def get_language_implementation(lang) do
+    case lang do
+      "java" -> {:ok, Languages.Java}
+      "python3" -> {:ok, Languages.Python3}
+      _ -> {:error, "Language not supported"}
+    end
+  end
+
 
   def make_folder(%Submission{id: id}) do
-    name = "sub_#{id}"
-    with :ok <- File.mkdir_p(name) do
-      {:ok, name}
+    path = "#{File.cwd!()}/sub_#{id}"
+    with :ok <- File.mkdir_p(path) do
+      {:ok, path}
     end
   end
 
   def fill_template(%Submission{code: snippet}, %Problem{} = _problem) do
     {:ok, snippet}
-  end
-
-  def make_source_file("java", source, folder_name) do
-    filename = "Main.java"
-    case File.write("#{folder_name}/#{filename}", source) do
-      :ok -> {:ok, filename}
-      err -> err
-    end
-  end
-
-  def build_source_file("java", folder_name, filename) do
-    IO.puts("building")
-    case System.cmd("docker", [
-      "run",
-      "-v", "#{File.cwd!()}/#{folder_name}:/app",
-      "-w", "/app",
-      "-i",
-      "java:8-alpine",
-      "javac",
-      filename
-    ], stderr_to_stdout: true) do
-      {msg, 0} -> {:ok, msg, "Main"}
-      {err, _} -> {:error, err}
-    end
-  end
-
-
-  def get_command("java", folder_name, artifact) do
-    {:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v $PWD/#{folder_name}:/app -w /app -i java:8-alpine java #{artifact}"}
   end
 
   def get_stdin(%TestCase{input: input}) do

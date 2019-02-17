@@ -32,7 +32,7 @@ defmodule OpenSubmissions.Execution.Languages.C do
 
   @impl Language
   def get_command(path, artifact) do
-    {:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v #{path}:/app -w /app -i alpine ./#{artifact}"}
+    {:ok, "docker run --network none -e RESULT_FILE=$RESULT_FILE -v #{path}:/app -w /app -i alpine ./#{artifact}"}
   end
 
 

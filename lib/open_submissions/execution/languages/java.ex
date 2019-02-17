@@ -30,7 +30,7 @@ defmodule OpenSubmissions.Execution.Languages.Java do
 
   @impl Language
   def get_command(path, artifact) do
-    {:ok, "docker run -e RESULT_FILE=$RESULT_FILE -v #{path}:/app -w /app -i java:8-alpine java #{artifact}"}
+    {:ok, "docker run --network none -e RESULT_FILE=$RESULT_FILE -v #{path}:/app -w /app -i java:8-alpine java #{artifact}"}
   end
 
 

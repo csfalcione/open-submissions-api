@@ -5,8 +5,8 @@ defmodule OpenSubmissions.Execution.Execution do
   alias OpenSubmissions.TestCases.TestCase
   alias OpenSubmissions.Execution.Languages
 
-  def execute_all(%Submission{language: lang_name} = submission, %Problem{} = problem, test_cases) do
-    with {:ok, language} <- get_language_implementation(lang_name),
+  def execute_all(%Submission{language: lang_name, id: submission_id} = submission, %Problem{} = problem, test_cases) do
+    result = with {:ok, language} <- get_language_implementation(lang_name),
       {:ok, path} <- make_folder(submission),
       {:ok, source} <- fill_template(submission, problem),
       {:ok, source_file} <- language.make_source_file(path, source),
@@ -33,15 +33,19 @@ defmodule OpenSubmissions.Execution.Execution do
       {:error, error} -> %{error: error}
     end
 
+    Task.async(fn -> cleanup_folder(get_submission_path(submission_id)) end)
+
+    result
+
   end
 
-  def execute( %TestCase{} = test_case, command, folder_name, timeout \\ 5000 ) do
+  def execute( %TestCase{} = test_case, command, path, timeout \\ 5000 ) do
 
     with stdin <- get_stdin(test_case),
       output_filename <- make_output_filename(test_case),
       {time_taken, {:ok, stdout}} <- time( fn -> execute_command(command, stdin, output_filename, timeout) end ) do
-      case read_problem_result(folder_name, output_filename) do
-        {:ok, problem_result} -> 
+      case read_problem_result(path, output_filename) do
+        {:ok, problem_result} ->
           {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
         {:error, :submission_error} -> 
           {:error, %{stdout: stdout}}
@@ -55,15 +59,25 @@ defmodule OpenSubmissions.Execution.Execution do
       "java"    -> {:ok, Languages.Java}
       "python3" -> {:ok, Languages.Python3}
       "c"       -> {:ok, Languages.C}
-      _ -> {:error, "Language not supported"}
+      _         -> {:error, "Language not supported"}
     end
   end
 
+  def get_submission_path(submission_id) do
+    "#{File.cwd!()}/sub_#{submission_id}"
+  end
 
   def make_folder(%Submission{id: id}) do
-    path = "#{File.cwd!()}/sub_#{id}"
+    path = get_submission_path(id)
     with :ok <- File.mkdir_p(path) do
       {:ok, path}
+    end
+  end
+
+  def cleanup_folder(path) do
+    IO.puts "cleaning up #{path}"
+    if File.exists?(path) do
+      File.rm_rf(path)
     end
   end
 

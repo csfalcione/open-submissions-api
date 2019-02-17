@@ -52,8 +52,9 @@ defmodule OpenSubmissions.Execution.Execution do
 
   def get_language_implementation(lang) do
     case lang do
-      "java" -> {:ok, Languages.Java}
+      "java"    -> {:ok, Languages.Java}
       "python3" -> {:ok, Languages.Python3}
+      "c"       -> {:ok, Languages.C}
       _ -> {:error, "Language not supported"}
     end
   end

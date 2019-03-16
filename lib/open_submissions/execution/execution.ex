@@ -4,39 +4,54 @@ defmodule OpenSubmissions.Execution.Execution do
   alias OpenSubmissions.Problems.Problem
   alias OpenSubmissions.TestCases.TestCase
   alias OpenSubmissions.Execution.Languages
+  alias OpenSubmissions.Events.PubSub
 
   def execute_all(%Submission{language: lang_name, id: submission_id} = submission, %Problem{} = problem, test_cases) do
-    result = with {:ok, language} <- get_language_implementation(lang_name),
+    with {:ok, language} <- get_language_implementation(lang_name),
       {:ok, path} <- make_folder(submission),
       {:ok, source} <- fill_template(submission, problem),
       {:ok, source_file} <- language.make_source_file(path, source),
       {:ok, artifact_name} <- language.build_source_file(path, source_file),
       {:ok, command} <- language.get_command(path, artifact_name) do
+
+        Task.async(fn -> 
+          test_cases
+          |> Task.async_stream( fn %TestCase{} = test_case ->
+              case execute(test_case, command, path) do
+                {:ok, result} -> result
+                {_time, {:error, error}} -> %{error: error}
+                {:error, error} -> %{error: error}
+              end
+            end, timeout: 20_000, on_timeout: :kill_task, ordered: true)
+          |> Stream.map(fn result ->
+              case result do
+                {:ok, res} -> res
+                {:exit, :timeout} -> %{error: "timeout"}
+              end
+            end)
+          |> Stream.zip(test_cases)
+          |> Stream.each(fn res -> broadcast_result(res, submission) end)
+          |> Stream.run
+          Task.async(fn -> cleanup_folder(get_submission_path(submission_id)) end)
+        end)
         
-        test_cases
-        |> Task.async_stream( fn %TestCase{} = test_case ->
-            case execute(test_case, command, path) do
-              {:ok, results} -> results
-              {_time, {:error, error}} -> %{error: error, test_case: test_case}
-              {:error, error} -> %{error: error, test_case: test_case}
-            end
-          end, timeout: 20_000, on_timeout: :kill_task, ordered: true)
-        |> Stream.zip(test_cases)
-        |> Stream.map(fn {result, test_case} -> 
-            case result do
-              {:ok, res} -> res
-              {:exit, :timeout} -> %{error: "timeout", test_case: test_case}
-            end
-          end)
-        |> Enum.to_list
-    else
-      {:error, error} -> %{error: error}
+        :ok
+      else
+        err -> 
+          Task.async(fn -> cleanup_folder(get_submission_path(submission_id)) end)
+          err
     end
 
-    Task.async(fn -> cleanup_folder(get_submission_path(submission_id)) end)
+  end
 
-    result
-
+  def broadcast_result({result, %TestCase{} = test_case}, %Submission{} = submission) do
+    PubSub.publish(:test_finished, %{
+      submission_id: submission.id,
+      test_id: test_case.id,
+      input: test_case.input,
+      expected: test_case.output,
+      result: result
+    })
   end
 
   def execute( %TestCase{} = test_case, command, path, timeout \\ 5000 ) do
@@ -46,7 +61,7 @@ defmodule OpenSubmissions.Execution.Execution do
       {time_taken, {:ok, stdout}} <- time( fn -> execute_command(command, stdin, output_filename, timeout) end ) do
       case read_problem_result(path, output_filename) do
         {:ok, problem_result} ->
-          {:ok, %{ stdout: stdout, output: problem_result, time: time_taken, test_case: test_case } }
+          {:ok, %{ stdout: stdout, output: problem_result, time: time_taken} }
         {:error, :submission_error} -> 
           {:error, %{stdout: stdout}}
       end

@@ -16,10 +16,16 @@ defmodule OpenSubmissionsWeb.SubmissionController do
     with {:ok, %Submission{} = submission} <- Submissions.create_submission(submission_params),
       %Problem{} = problem <- Problems.get_problem!(problem_id),
       [%TestCase{} | _] = cases <- TestCases.list_by_problem(problem_id) do
-        results = Execution.execute_all(submission, problem, cases)
-        conn
-        |> put_status(:created)
-        |> json(results)
+        createdConn = put_status(conn, :created)
+
+        case Execution.execute_all(submission, problem, cases) do
+          :ok -> 
+            render(createdConn, "show.json", submission: submission)
+          {:error, error}  -> 
+            json(createdConn, %{error: error})
+        end
+
+        
     end
   end
 

@@ -27,8 +27,9 @@ config :phoenix, :json_library, Jason
 
 config :open_submissions,
   event_handlers: [
-    test_finished: [
+    test_executed: [
       OpenSubmissions.Events.Handlers.Echo,
+      OpenSubmissions.Events.Handlers.TestFinishedWebSocket,
     ]
   ]
 

@@ -2,7 +2,7 @@ defmodule OpenSubmissionsWeb.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  # channel "room:*", OpenSubmissionsWeb.RoomChannel
+  channel "submission:*", OpenSubmissionsWeb.SubmissionChannel
 
   # Socket params are passed from the client and can
   # be used to verify and authenticate a user. After
